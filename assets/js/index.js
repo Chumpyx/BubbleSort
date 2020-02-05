@@ -29,7 +29,8 @@ var canvas = $("#drawing");
 var canvasOffset = canvas.offset();
 
 // Others main variables
-var ended = false;
+var gameStarted = false;
+var gameEnded = false;
 var boxes = [];
 var tubes = [];
 
@@ -76,9 +77,6 @@ var tubeInfos = {
 };
 
 var colorsAlreadyDrawn = [];
-for (var i = 0; i < boxesInfos.colors.length; i++) {
-	colorsAlreadyDrawn.push(numberOfBoxesInTubes);
-}
 
 var totalTubesWidth = numberOfTubes.columns * (tubeInfos.size.width + tubeInfos.spaceBetween.sideway) - tubeInfos.spaceBetween.sideway + 2 * (tubeInfos.border.thickness / 2); // 2 half-border (left and right)
 var totalTubesHeight = numberOfTubes.rows * (tubeInfos.size.height + tubeInfos.spaceBetween.upDown) - tubeInfos.spaceBetween.upDown + (tubeInfos.border.thickness / 2); // 1 half-border down side
@@ -188,6 +186,53 @@ function removeCurrentBox() {
 	boxes[currentSelectedBox.row][currentSelectedBox.column].splice(-1, 1);
 }
 
+function initTubes() {
+	for (let iRow = 0; iRow < numberOfTubes.rows; iRow++) {
+		tubes[iRow] = [];
+		for (let iColumn = 0; iColumn < numberOfTubes.columns; iColumn++) {
+			addTube(iRow, iColumn);
+		}
+	}
+}
+
+function initBoxes() {
+	for (let iRow = 0; iRow < numberOfTubes.rows; iRow++) {
+		boxes[iRow] = [];
+		for (let iColumn = 0; iColumn < numberOfTubes.columns; iColumn++) {
+			boxes[iRow][iColumn] = [];
+			if (iRow !== emptyTube.row || iColumn !== emptyTube.column) {
+				for (let iBox = 0; iBox < numberOfBoxesInTubes; iBox++) {
+					addNewBox(iRow, iColumn);
+				}
+			}
+		}
+	}
+}
+
+function checkIfGameIsEnded() {
+	pf("------------------------------------------");
+	pf("-               Game ended               -");
+	pf("------------------------------------------");
+	if (gameEnded) return true;
+	for (let iRow = 0; iRow < numberOfTubes.rows; iRow++) {
+		pf("#### ROW " + iRow);
+		for (let iColumn = 0; iColumn < numberOfTubes.columns; iColumn++) {
+		pf("# COLUMN " + iColumn);
+			let boxesInTube = boxes[iRow][iColumn].length;
+			if (boxesInTube === numberOfBoxesInTubes) {
+				let colorFirstBoxOfTube = boxes[iRow][iColumn][0].color;
+				pf("color ref: " + colorFirstBoxOfTube);
+				for (let iBox = 1; iBox < numberOfBoxesInTubes; iBox++) {
+					pf("color: " + boxes[iRow][iColumn][iBox].color);
+					if (boxes[iRow][iColumn][iBox].color !== colorFirstBoxOfTube) return false;
+				}
+			} else if (boxesInTube !== 0) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
 
 
 // ###################
@@ -196,73 +241,93 @@ function removeCurrentBox() {
 // #                 #
 // ###################
 
-// INITS
-
-// Tubes' init
-for (let iRow = 0; iRow < numberOfTubes.rows; iRow++) {
-	tubes[iRow] = [];
-	for (let iColumn = 0; iColumn < numberOfTubes.columns; iColumn++) {
-		addTube(iRow, iColumn);
-	}
-}
-
-// Boxes' init
-for (let iRow = 0; iRow < numberOfTubes.rows; iRow++) {
-	boxes[iRow] = [];
-	for (let iColumn = 0; iColumn < numberOfTubes.columns; iColumn++) {
-		boxes[iRow][iColumn] = [];
-		if (iRow !== emptyTube.row || iColumn !== emptyTube.column) {
-			for (let iBox = 0; iBox < numberOfBoxesInTubes; iBox++) {
-				addNewBox(iRow, iColumn);
-			}
-		}
-	}
-}
-
-
-// EVENTS
+// // Events
 
 // When mouse down
 $(canvas).mousedown(function(event) {
 
-	if (!ended) { // If then current game isn't finished yet
+	if (gameStarted) {
 
-		let mousePosition = {
-			"x": event.pageX - canvasOffset.left,
-			"y": event.pageY - canvasOffset.top
-		};
-		
-		if (event.which === 1) { // When left clicking
+		if (!gameEnded) { // If then current game isn't finished yet
 
-			let tube = mouseInTube(mousePosition);
+			let mousePosition = {
+				"x": event.pageX - canvasOffset.left,
+				"y": event.pageY - canvasOffset.top
+			};
+			
+			if (event.which === 1) { // When left clicking
 
-			if (currentSelectedBox === null) { // If no box is currently selected
-				if (typeof tube !== "undefined") { // If the click is on a tube
-					if (boxes[tube.row][tube.column].length > 0) { // If there is a box in the tube clicked
-						let iBox = boxes[tube.row][tube.column].length - 1;
-						currentSelectedBox = {
-							"row": tube.row,
-							"column": tube.column,
-							"color": boxes[tube.row][tube.column][iBox].color,
-							"iBox": iBox
-						};
-						boxes[tube.row][tube.column][iBox].element.dmove(0, -30); // Move it upward
+				let tube = mouseInTube(mousePosition);
+
+				if (currentSelectedBox === null) { // If no box is currently selected
+					if (typeof tube !== "undefined") { // If the click is on a tube
+						if (boxes[tube.row][tube.column].length > 0) { // If there is a box in the tube clicked
+							let iBox = boxes[tube.row][tube.column].length - 1;
+							currentSelectedBox = {
+								"row": tube.row,
+								"column": tube.column,
+								"color": boxes[tube.row][tube.column][iBox].color,
+								"iBox": iBox
+							};
+							boxes[tube.row][tube.column][iBox].element.dmove(0, -30); // Move it upward
+						}
+					}
+				} else { // If a box is currently selected
+					if (typeof tube === "undefined" || boxes[tube.row][tube.column].length === 4 || (tube.row === currentSelectedBox.row && tube.column === currentSelectedBox.column)) { // If the click is out of a tube or, the tube clicked is already full, or the tube clicked is the same as where is the current selected box
+						boxes[currentSelectedBox.row][currentSelectedBox.column][currentSelectedBox.iBox].element.dmove(0, 30); // Reset position
+						currentSelectedBox = null;
+					} else { // A box is selected and the tube clicked is not full
+						moveCurrentBoxToTube(tube);
+						currentSelectedBox = null;
+						gameEnded = checkIfGameIsEnded();
+						if (gameEnded) {
+							console.log("Vous avez fini en x.xx secondes! Cliquez pour relancer une partie.");
+						}
 					}
 				}
-			} else { // If a box is currently selected
-				if (typeof tube === "undefined" || boxes[tube.row][tube.column].length === 4 || (tube.row === currentSelectedBox.row && tube.column === currentSelectedBox.column)) { // If the click is out of a tube or, the tube clicked is already full, or the tube clicked is the same as where is the current selected box
+			} else { // When right clicking
+				if (currentSelectedBox !== null) { // If a box is currently selected
 					boxes[currentSelectedBox.row][currentSelectedBox.column][currentSelectedBox.iBox].element.dmove(0, 30); // Reset position
-					currentSelectedBox = null;
-				} else { // A box is selected and the tube clicked is not full
-					moveCurrentBoxToTube(tube);
 					currentSelectedBox = null;
 				}
 			}
-		} else { // When right clicking
-			if (currentSelectedBox !== null) { // If a box is currently selected
-				boxes[currentSelectedBox.row][currentSelectedBox.column][currentSelectedBox.iBox].element.dmove(0, 30); // Reset position
-				currentSelectedBox = null;
-			}
+		} else {
+			startGame();
 		}
 	}
 });
+
+function initVariables() {
+	gameEnded = false;
+	boxes = [];
+	tubes = [];
+
+	currentSelectedBox = null;
+
+	// Select empty tube
+	emptyTube = {
+		"row": getRandomNumber(numberOfTubes.rows),
+		"column": getRandomNumber(numberOfTubes.columns)
+	};
+
+
+	colorsAlreadyDrawn = [];
+	for (var i = 0; i < boxesInfos.colors.length; i++) {
+		colorsAlreadyDrawn.push(numberOfBoxesInTubes);
+	}
+}
+
+function startGame() {
+	// // Inits
+	initVariables();
+
+	// Tubes' init
+	initTubes();
+
+	// Boxes' init
+	initBoxes();
+
+	gameStarted = true;
+}
+
+startGame();
